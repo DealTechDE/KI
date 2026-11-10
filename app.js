@@ -12,7 +12,7 @@
   const saveScore = (id, percent) => {
     const p = loadProgress();
     p[id] = Math.max(p[id] || 0, percent);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
     renderOverall();
   };
   const renderOverall = () => {
@@ -21,12 +21,25 @@
     document.getElementById("overallProgress").textContent = `✓ ${done} / ${TOPICS.length} Themen`;
   };
 
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    if (confirm("Gesamten Lernfortschritt löschen?")) {
-      localStorage.removeItem(STORAGE_KEY);
-      renderOverall();
-      route();
+  // Zweistufige Bestätigung im Button selbst (confirm() ist nicht überall erlaubt)
+  const resetBtn = document.getElementById("resetBtn");
+  let resetTimer;
+  resetBtn.addEventListener("click", () => {
+    if (!resetBtn.dataset.armed) {
+      resetBtn.dataset.armed = "1";
+      resetBtn.textContent = "Wirklich alles löschen? Nochmal klicken";
+      resetTimer = setTimeout(() => {
+        delete resetBtn.dataset.armed;
+        resetBtn.textContent = "Fortschritt zurücksetzen";
+      }, 4000);
+      return;
     }
+    clearTimeout(resetTimer);
+    delete resetBtn.dataset.armed;
+    resetBtn.textContent = "Fortschritt zurücksetzen";
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    renderOverall();
+    route();
   });
 
   // ---------- Hilfsfunktionen ----------
@@ -65,7 +78,7 @@
       const score = p[t.id];
       const done = score >= PASS_PERCENT;
       return `
-        <a class="card" href="#/topic/${t.id}">
+        <a class="card" href="#topic-${t.id}">
           <h3>${t.title}</h3>
           <p>${t.summary}</p>
           <div class="card-meta">
@@ -87,7 +100,7 @@
       <div class="filters">
         ${levels.map((l) => `<button class="chip ${l === levelFilter ? "active" : ""}" data-level="${l}">${l}</button>`).join("")}
       </div>
-      ${section("Zeitformen (Tenses)", `<a class="section-link" href="#/zeiten">Zeitenübersicht als Tabelle →</a>`, tenses)}
+      ${section("Zeitformen (Tenses)", `<a class="section-link" href="#zeiten">Zeitenübersicht als Tabelle →</a>`, tenses)}
       ${section("Weitere Grammatik", "", others)}`;
 
     app.querySelectorAll(".chip").forEach((b) =>
@@ -98,11 +111,11 @@
   // ---------- Themenseite ----------
   function renderTopic(id, tab = "learn") {
     const t = TOPICS.find((x) => x.id === id);
-    if (!t) { location.hash = "#/"; return; }
+    if (!t) { location.hash = "#start"; return; }
 
     app.innerHTML = `
-      <a class="back" href="#/">← Alle Themen</a>
-      ${TENSE_IDS.includes(t.id) ? ` · <a class="back" href="#/zeiten">Zeitenübersicht</a>` : ""}
+      <a class="back" href="#start">← Alle Themen</a>
+      ${TENSE_IDS.includes(t.id) ? ` · <a class="back" href="#zeiten">Zeitenübersicht</a>` : ""}
       <h1>${t.title} <span class="level ${t.level}">${t.level}</span></h1>
       <p class="lead">${t.summary}</p>
       <div class="tabs">
@@ -148,18 +161,18 @@
   // ---------- Zeitenübersicht ----------
   function renderOverview() {
     app.innerHTML = `
-      <a class="back" href="#/">← Alle Themen</a>
+      <a class="back" href="#start">← Alle Themen</a>
       <h1>Zeitenübersicht</h1>
       <p class="lead">Alle englischen Zeitformen auf einen Blick – mit Bildung, Verwendung und Signalwörtern.
       Klicke auf eine Zeitform für Erklärung und Übungen.</p>
-      <div class="btn-row" style="margin:-1rem 0 1.5rem"><a class="btn" href="#/quiz/zeiten" style="text-decoration:none">Zeiten-Quiz starten →</a></div>
+      <div class="btn-row" style="margin:-1rem 0 1.5rem"><a class="btn" href="#quiz-zeiten" style="text-decoration:none">Zeiten-Quiz starten →</a></div>
       <div class="table-wrap">
         <table class="tense-table">
           <thead><tr><th>Zeitform</th><th>Positiv / Negativ / Frage</th><th>Verwendung</th><th>Signalwörter</th></tr></thead>
           <tbody>
             ${TENSE_OVERVIEW.map((r) => `
               <tr>
-                <td class="tense-name"><a href="#/topic/${r.topic}">${r.name}</a>${r.alt ? `<span>(${r.alt})</span>` : ""}</td>
+                <td class="tense-name"><a href="#topic-${r.topic}">${r.name}</a>${r.alt ? `<span>(${r.alt})</span>` : ""}</td>
                 <td class="tense-forms">${r.forms.map((f) => `<div>${f}</div>`).join("")}</td>
                 <td><ul>${r.use.map((u) => `<li>${u}</li>`).join("")}</ul></td>
                 <td>${r.signal}</td>
@@ -177,7 +190,7 @@
       .flatMap((t) => t.exercises.map((e) => ({ ...e, topic: t })));
     const questions = shuffle(pool).slice(0, QUIZ_LENGTH);
     app.innerHTML = `
-      <a class="back" href="${onlyTenses ? "#/zeiten" : "#/"}">← ${onlyTenses ? "Zeitenübersicht" : "Alle Themen"}</a>
+      <a class="back" href="${onlyTenses ? "#zeiten" : "#start"}">← ${onlyTenses ? "Zeitenübersicht" : "Alle Themen"}</a>
       <h1>${onlyTenses ? "Zeiten-Quiz" : "Gemischtes Quiz"}</h1>
       <p class="lead">${QUIZ_LENGTH} zufällige Fragen aus ${onlyTenses ? "allen Zeitformen" : "allen Themen"}.</p>
       <div id="quizContent"></div>`;
@@ -284,11 +297,11 @@
             <div class="review">
               <h3>Deine Fehler zum Wiederholen</h3>
               <ul>${mistakes.map((m) => `<li>${escapeHtml(m.q)} → <b>${escapeHtml(correctText(m))}</b>
-                ${showTopic ? `<a href="#/topic/${m.topic.id}">(${m.topic.title})</a>` : ""}</li>`).join("")}</ul>
+                ${showTopic ? `<a href="#topic-${m.topic.id}">(${m.topic.title})</a>` : ""}</li>`).join("")}</ul>
             </div>` : ""}
           <div class="btn-row" style="justify-content:center">
             <button class="btn retry">Nochmal</button>
-            <a class="btn secondary" href="#/" style="text-decoration:none">Zur Übersicht</a>
+            <a class="btn secondary" href="#start" style="text-decoration:none">Zur Übersicht</a>
           </div>
         </div>`));
       container.querySelector(".retry").addEventListener("click", retry);
@@ -299,8 +312,9 @@
 
   // ---------- Router ----------
   function route() {
-    const hash = location.hash.replace(/^#\/?/, "");
-    const [page, id] = hash.split("/");
+    // Routen: #start, #zeiten, #quiz, #quiz-zeiten, #topic-<id>
+    const hash = location.hash.slice(1);
+    const [, page, id] = hash.match(/^(topic|quiz|zeiten)(?:-(.+))?$/) || [];
     window.scrollTo(0, 0);
     app.classList.toggle("wide", page === "zeiten");
     if (page === "topic" && id) renderTopic(id);
