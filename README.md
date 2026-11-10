@@ -3,7 +3,9 @@
 Eine Lern-Website für englische Grammatik mit deutschen Erklärungen.
 
 ## Funktionen
-- **12 Grammatikthemen** von A1 bis B2 (Present Simple, Present Perfect, Conditionals, Passive, Reported Speech u. a.)
+- **Alle 12 englischen Zeitformen** (Simple Present bis Future Perfect Progressive) als eigene Themen
+- **Zeitenübersicht**: Tabelle mit Bildung (positiv/negativ/Frage), Verwendung und Signalwörtern, plus Zeiten-Quiz
+- **Weitere Grammatik**: Artikel, Steigerung, Modalverben, If-Sätze, Passiv, Reported Speech, Relativsätze
 - Jedes Thema mit Erklärung: Verwendung, Bildung, Beispiele mit Übersetzung, Signalwörter und Tipps
 - **Übungen**: Multiple Choice und Lückentexte mit sofortigem Feedback und Begründung
 - **Gemischtes Quiz** mit 10 zufälligen Fragen aus allen Themen

@@ -57,7 +57,28 @@
     const levels = ["Alle", ...new Set(TOPICS.map((t) => t.level))].sort((a, b) =>
       a === "Alle" ? -1 : b === "Alle" ? 1 : a.localeCompare(b)
     );
-    const topics = TOPICS.filter((t) => levelFilter === "Alle" || t.level === levelFilter);
+    const byLevel = (t) => levelFilter === "Alle" || t.level === levelFilter;
+    const tenses = TENSE_IDS.map((id) => TOPICS.find((t) => t.id === id)).filter(byLevel);
+    const others = TOPICS.filter((t) => !TENSE_IDS.includes(t.id)).filter(byLevel);
+
+    const card = (t) => {
+      const score = p[t.id];
+      const done = score >= PASS_PERCENT;
+      return `
+        <a class="card" href="#/topic/${t.id}">
+          <h3>${t.title}</h3>
+          <p>${t.summary}</p>
+          <div class="card-meta">
+            <span class="level ${t.level}">${t.level}</span>
+            <span class="score ${done ? "done" : ""}">
+              ${score === undefined ? "Noch nicht geübt" : (done ? "✓ " : "") + "Bestwert " + score + " %"}
+            </span>
+          </div>
+        </a>`;
+    };
+    const section = (title, extra, list) => list.length ? `
+      <div class="section-head"><h2>${title}</h2>${extra}</div>
+      <div class="grid">${list.map(card).join("")}</div>` : "";
 
     app.innerHTML = `
       <h1>Englische Grammatik – verständlich erklärt</h1>
@@ -66,23 +87,8 @@
       <div class="filters">
         ${levels.map((l) => `<button class="chip ${l === levelFilter ? "active" : ""}" data-level="${l}">${l}</button>`).join("")}
       </div>
-      <div class="grid">
-        ${topics.map((t) => {
-          const score = p[t.id];
-          const done = score >= PASS_PERCENT;
-          return `
-            <a class="card" href="#/topic/${t.id}">
-              <h3>${t.title}</h3>
-              <p>${t.summary}</p>
-              <div class="card-meta">
-                <span class="level ${t.level}">${t.level}</span>
-                <span class="score ${done ? "done" : ""}">
-                  ${score === undefined ? "Noch nicht geübt" : (done ? "✓ " : "") + "Bestwert " + score + " %"}
-                </span>
-              </div>
-            </a>`;
-        }).join("")}
-      </div>`;
+      ${section("Zeitformen (Tenses)", `<a class="section-link" href="#/zeiten">Zeitenübersicht als Tabelle →</a>`, tenses)}
+      ${section("Weitere Grammatik", "", others)}`;
 
     app.querySelectorAll(".chip").forEach((b) =>
       b.addEventListener("click", () => { levelFilter = b.dataset.level; renderHome(); })
@@ -96,6 +102,7 @@
 
     app.innerHTML = `
       <a class="back" href="#/">← Alle Themen</a>
+      ${TENSE_IDS.includes(t.id) ? ` · <a class="back" href="#/zeiten">Zeitenübersicht</a>` : ""}
       <h1>${t.title} <span class="level ${t.level}">${t.level}</span></h1>
       <p class="lead">${t.summary}</p>
       <div class="tabs">
@@ -138,18 +145,45 @@
     }
   }
 
-  // ---------- Gemischtes Quiz ----------
-  function renderQuiz() {
-    const pool = TOPICS.flatMap((t) => t.exercises.map((e) => ({ ...e, topic: t })));
-    const questions = shuffle(pool).slice(0, QUIZ_LENGTH);
+  // ---------- Zeitenübersicht ----------
+  function renderOverview() {
     app.innerHTML = `
       <a class="back" href="#/">← Alle Themen</a>
-      <h1>Gemischtes Quiz</h1>
-      <p class="lead">${QUIZ_LENGTH} zufällige Fragen aus allen Themen.</p>
+      <h1>Zeitenübersicht</h1>
+      <p class="lead">Alle englischen Zeitformen auf einen Blick – mit Bildung, Verwendung und Signalwörtern.
+      Klicke auf eine Zeitform für Erklärung und Übungen.</p>
+      <div class="btn-row" style="margin:-1rem 0 1.5rem"><a class="btn" href="#/quiz/zeiten" style="text-decoration:none">Zeiten-Quiz starten →</a></div>
+      <div class="table-wrap">
+        <table class="tense-table">
+          <thead><tr><th>Zeitform</th><th>Positiv / Negativ / Frage</th><th>Verwendung</th><th>Signalwörter</th></tr></thead>
+          <tbody>
+            ${TENSE_OVERVIEW.map((r) => `
+              <tr>
+                <td class="tense-name"><a href="#/topic/${r.topic}">${r.name}</a>${r.alt ? `<span>(${r.alt})</span>` : ""}</td>
+                <td class="tense-forms">${r.forms.map((f) => `<div>${f}</div>`).join("")}</td>
+                <td><ul>${r.use.map((u) => `<li>${u}</li>`).join("")}</ul></td>
+                <td>${r.signal}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ---------- Gemischtes Quiz ----------
+  function renderQuiz(mode) {
+    const onlyTenses = mode === "zeiten";
+    const pool = TOPICS
+      .filter((t) => !onlyTenses || TENSE_IDS.includes(t.id))
+      .flatMap((t) => t.exercises.map((e) => ({ ...e, topic: t })));
+    const questions = shuffle(pool).slice(0, QUIZ_LENGTH);
+    app.innerHTML = `
+      <a class="back" href="${onlyTenses ? "#/zeiten" : "#/"}">← ${onlyTenses ? "Zeitenübersicht" : "Alle Themen"}</a>
+      <h1>${onlyTenses ? "Zeiten-Quiz" : "Gemischtes Quiz"}</h1>
+      <p class="lead">${QUIZ_LENGTH} zufällige Fragen aus ${onlyTenses ? "allen Zeitformen" : "allen Themen"}.</p>
       <div id="quizContent"></div>`;
     runExercises(document.getElementById("quizContent"), questions, {
       showTopic: true,
-      retry: renderQuiz,
+      retry: () => renderQuiz(mode),
     });
   }
 
@@ -268,8 +302,10 @@
     const hash = location.hash.replace(/^#\/?/, "");
     const [page, id] = hash.split("/");
     window.scrollTo(0, 0);
+    app.classList.toggle("wide", page === "zeiten");
     if (page === "topic" && id) renderTopic(id);
-    else if (page === "quiz") renderQuiz();
+    else if (page === "quiz") renderQuiz(id);
+    else if (page === "zeiten") renderOverview();
     else renderHome();
   }
 
